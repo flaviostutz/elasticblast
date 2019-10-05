@@ -1,0 +1,43 @@
+version: '3.5'
+
+services:
+
+  bridge:
+    build: .
+    image: flaviostutz/elasticsearch-blast-bridge
+    restart: always
+    ports:
+      - 9200:9200
+    environment:
+      - LOG_LEVEL=debug
+      - BLAST_URL=http://blast:6000
+
+  blast:
+    image: flaviostutz/blast-indexer
+    ports:
+      - 6000:6000
+
+  conductor-server:
+    image: flaviostutz/conductor-server
+    restart: always
+    ports:
+      - 8080:8080
+    environment:
+      - DYNOMITE_HOSTS=dynomite:8102:us-east-1c
+      - ELASTICSEARCH_URL=http://bridge:9200
+      - LOADSAMPLE=true
+      - PROVISIONING_UPDATE_EXISTING_TASKS=false
+
+  dynomite:
+    image: flaviostutz/dynomite:0.7.5
+    restart: always
+    ports:
+      - 8102:8102
+
+  conductor-ui:
+    image: flaviostutz/conductor-ui
+    restart: always
+    environment:
+      - WF_SERVER=http://backtor-conductor:8080/api/
+    ports:
+      - 5000:5000
