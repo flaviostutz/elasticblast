@@ -1,9 +1,9 @@
-FROM golang:1.12.3 AS BUILD
+FROM golang:1.13.2 AS BUILD
 
 RUN apt-get update && apt-get install -y libgeos-dev
 
-RUN mkdir /backtor
-WORKDIR /backtor
+RUN mkdir /elasticblast
+WORKDIR /elasticblast
 
 ADD go.mod .
 ADD go.sum .
@@ -11,15 +11,15 @@ RUN go mod download
 
 #now build source code
 ADD . ./
-RUN go build -o /go/bin/backtor
+RUN go build -o /go/bin/elasticblast
 
 
 
-FROM golang:1.12.3
+FROM golang:1.13.2
 
-VOLUME [ "/var/lib/backtor/data" ]
+EXPOSE 9200
 
-ENV ELASTICSEARCH_URL       ''
+ENV BLAST_URL       ''
 
 COPY --from=BUILD /go/bin/* /bin/
 ADD startup.sh /

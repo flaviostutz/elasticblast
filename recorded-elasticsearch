@@ -1,0 +1,292 @@
+GET /_cluster/health?timeout=30s&wait_for_status=green HTTP/1.1" 200 390 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.231 req_body:"" resp_body:"{"cluster_name":"docker-cluster","status":"green","timed_out":false,"number_of_nodes":1,"number_of_data_nodes":1,"active_primary_shards":0,"active_shards":0,"relocating_shards":0,"initializing_shards":0,"unassigned_shards":0,"delayed_unassigned_shards":0,"number_of_pending_tasks":0,"number_of_in_flight_fetch":0,"task_max_waiting_in_queue_millis":0,"active_shards_percent_as_number":100.0}"
+
+HEAD /_template/tasklog_template HTTP/1.1" 404 0 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.022 req_body:"" resp_body:""
+
+PUT /_template/tasklog_template HTTP/1.1" 200 21 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.068 req_body:"{
+"order": 0,
+"template": "*task*log*",
+"settings": {
+    "index": {
+        "refresh_interval": "1s"
+    }
+},
+"mappings": {
+    "event": {
+        "properties": {
+            "action": {
+                "type": "keyword",
+                "index": true
+            },
+            "created": {
+                "type": "long"
+            },
+            "event": {
+                "type": "keyword",
+                "index": true
+            },
+            "id": {
+                "type": "keyword",
+                "index": true
+            },
+            "messageId": {
+                "type": "keyword",
+                "index": true
+            },
+            "name": {
+                "type": "keyword",
+                "index": true
+            },
+            "output": {
+                "properties": {
+                    "workflowId": {
+                        "type": "keyword",
+                        "index": true
+                    }
+                }
+            },
+            "status": {
+                "type": "keyword",
+                "index": true
+            }
+        }
+    },
+    "task_log": {
+        "properties": {
+            "createdTime": {
+                "type": "long"
+            },
+            "log": {
+                "type": "keyword",
+                "index": true
+            },
+            "taskId": {
+                "type": "keyword",
+                "index": true
+            }
+        }
+    },
+    "message": {
+        "properties": {
+            "created": {
+                "type": "long"
+            },
+            "messageId": {
+                "type": "keyword",
+                "index": true
+            },
+            "payload": {
+                "type": "keyword",
+                "index": true
+            },
+            "queue": {
+                "type": "keyword",
+                "index": true
+            }
+        }
+    }
+},
+"aliases": {}
+}" resp_body:"{"acknowledged":true}
+
+
+HEAD /task_log_20191252 HTTP/1.1" 404 0 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.033 req_body:"" resp_body:""
+
+
+PUT /task_log_20191252 HTTP/1.1" 200 76 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.522 req_body:"" resp_body:"{"acknowledged":true,"shards_acknowledged":true,"index":"task_log_20191252"}
+
+
+HEAD /conductor HTTP/1.1" 404 0 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.018 req_body:"" resp_body:""
+
+
+HEAD /task_log_20191252 HTTP/1.1" 200 0 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.043 req_body:"" resp_body:""
+
+
+PUT /conductor HTTP/1.1" 200 68 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.143 req_body:"" resp_body:"{"acknowledged":true,"shards_acknowledged":true,"index":"conductor"}"
+
+
+HEAD /conductor/_mapping/workflow HTTP/1.1" 404 0 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.007 req_body:"" resp_body:""
+
+
+PUT /conductor/_mapping/workflow HTTP/1.1" 200 21 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.035 req_body:"{
+  "workflow": {
+"properties": {
+  "correlationId": {
+    "type": "keyword",
+    "index": true,
+    "doc_values": true
+  },
+  "endTime": {
+    "type": "date",
+    "format": "strict_date_optional_time||epoch_millis",
+    "doc_values": true
+  },
+  "executionTime": {
+    "type": "long",
+    "doc_values": true
+  },
+  "failedReferenceTaskNames": {
+    "type": "text",
+    "index": false
+  },
+  "input": {
+    "type": "text",
+    "index": true
+  },
+  "output": {
+    "type": "text",
+    "index": true
+  },
+  "reasonForIncompletion": {
+    "type": "keyword",
+    "index": true,
+    "doc_values": true
+  },
+  "startTime": {
+    "type": "date",
+    "format": "strict_date_optional_time||epoch_millis",
+    "doc_values": true
+  },
+  "status": {
+    "type": "keyword",
+    "index": true,
+    "doc_values": true
+  },
+  "updateTime": {
+    "type": "date",
+    "format": "strict_date_optional_time||epoch_millis",
+    "doc_values": true
+  },
+  "version": {
+    "type": "long",
+    "doc_values": true
+  },
+  "workflowId": {
+    "type": "keyword",
+    "index": true,
+    "doc_values": true
+  },
+  "workflowType": {
+    "type": "keyword",
+    "index": true,
+    "doc_values": true
+  },
+  "rawJSON": {
+    "type": "text",
+    "index": false
+  },
+  "event": {
+    "type": "keyword",
+    "index": true
+  }
+}
+  }
+}" resp_body:"{"acknowledged":true}"
+
+
+HEAD /conductor/_mapping/task HTTP/1.1" 404 0 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.004 req_body:"" resp_body:""
+
+
+PUT /conductor/_mapping/task HTTP/1.1" 200 21 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.026 req_body:"{
+  "task": {
+"properties": {
+  "correlationId": {
+    "type": "keyword",
+    "index": true
+  },
+  "endTime": {
+    "type": "date",
+    "format": "strict_date_optional_time||epoch_millis"
+  },
+  "executionTime": {
+    "type": "long"
+  },
+  "input": {
+    "type": "text",
+    "index": true
+  },
+  "output": {
+    "type": "text",
+    "index": true
+  },
+  "queueWaitTime": {
+    "type": "long"
+  },
+  "reasonForIncompletion": {
+    "type": "keyword",
+    "index": true
+  },
+  "scheduledTime": {
+    "type": "date",
+    "format": "strict_date_optional_time||epoch_millis"
+  },
+  "startTime": {
+    "type": "date",
+    "format": "strict_date_optional_time||epoch_millis"
+  },
+  "status": {
+    "type": "keyword",
+    "index": true
+  },
+  "taskDefName": {
+    "type": "keyword",
+    "index": true
+  },
+  "taskId": {
+    "type": "keyword",
+    "index": true
+  },
+  "taskType": {
+    "type": "keyword",
+    "index": true
+  },
+  "updateTime": {
+    "type": "date",
+    "format": "strict_date_optional_time||epoch_millis"
+  },
+  "workflowId": {
+    "type": "keyword",
+    "index": true
+  },
+  "workflowType": {
+    "type": "keyword",
+    "index": true
+  }
+}
+  }
+}" resp_body:"{"acknowledged":true}"
+
+
+ELASTICSEARCH
+PUT /conductor/workflow/193f4a0f-00e0-4396-9d20-3d13e28ae7b3?timeout=1m HTTP/1.1" 201 181 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.045 req_body:"{"workflowType":"kitchensink","version":1,"workflowId":"193f4a0f-00e0-4396-9d20-3d13e28ae7b3","startTime":"2019-12-27T12:10:16.601Z","status":"RUNNING","input":"{task2Name=task_5}","output":"{}","executionTime":0,"inputSize":18,"outputSize":2}" resp_body:"{"_index":"conductor","_type":"workflow","_id":"193f4a0f-00e0-4396-9d20-3d13e28ae7b3","_version":1,"result":"created","_shards":{"total":2,"successful":1,"failed":0},"created":true}"
+PUT /conductor/workflow/193f4a0f-00e0-4396-9d20-3d13e28ae7b3?timeout=1m HTTP/1.1" 200 182 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.013 req_body:"{"workflowType":"kitchensink","version":1,"workflowId":"193f4a0f-00e0-4396-9d20-3d13e28ae7b3","startTime":"2019-12-27T12:10:16.601Z","updateTime":"2019-12-27T12:10:17.027Z","status":"RUNNING","input":"{task2Name=task_5}","output":"{}","executionTime":0,"inputSize":18,"outputSize":2}" resp_body:"{"_index":"conductor","_type":"workflow","_id":"193f4a0f-00e0-4396-9d20-3d13e28ae7b3","_version":2,"result":"updated","_shards":{"total":2,"successful":1,"failed":0},"created":false}"
+
+BLAST
+$ curl -X PUT 'http://127.0.0.1:6000/v1/documents/193f4a0f-00e0-4396-9d20-3d13e28ae7b3' -H 'Content-Type: application/json' --data-binary '
+{
+  "fields": {
+    "workflowType":"kitchensink","version":1,"workflowId":"193f4a0f-00e0-4396-9d20-3d13e28ae7b3","startTime":"2019-12-27T12:10:16.601Z","updateTime":"2019-12-27T12:10:17.027Z","status":"RUNNING","input":"{task2Name=task_5}","output":"{}","executionTime":0,"inputSize":18,"outputSize":2,
+?    "timestamp": "2018-07-04T05:41:00Z",
+    "_type": "workflow"
+  }
+}
+resp_body:"{"_index":"conductor","_type":"workflow","_id":"193f4a0f-00e0-4396-9d20-3d13e28ae7b3","_version":2,"result":"updated","_shards":{"total":2,"successful":1,"failed":0},"created":false}
+
+
+
+
+PUT /conductor/workflow/d3a4a1dc-2c56-46e5-b589-de4bfb024782?timeout=1m HTTP/1.1" 201 181 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.010 req_body:"{"workflowType":"ephemeralKitchenSinkStoredTasks","version":1,"workflowId":"d3a4a1dc-2c56-46e5-b589-de4bfb024782","startTime":"2019-12-27T12:10:17.162Z","status":"RUNNING","input":"{task2Name=task_5}","output":"{}","executionTime":0,"inputSize":18,"outputSize":2}" resp_body:"{"_index":"conductor","_type":"workflow","_id":"d3a4a1dc-2c56-46e5-b589-de4bfb024782","_version":1,"result":"created","_shards":{"total":2,"successful":1,"failed":0},"created":true}"
+
+
+PUT /conductor/workflow/d3a4a1dc-2c56-46e5-b589-de4bfb024782?timeout=1m HTTP/1.1" 200 182 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.014 req_body:"{"workflowType":"ephemeralKitchenSinkStoredTasks","version":1,"workflowId":"d3a4a1dc-2c56-46e5-b589-de4bfb024782","startTime":"2019-12-27T12:10:17.162Z","updateTime":"2019-12-27T12:10:17.187Z","status":"RUNNING","input":"{task2Name=task_5}","output":"{}","executionTime":0,"inputSize":18,"outputSize":2}" resp_body:"{"_index":"conductor","_type":"workflow","_id":"d3a4a1dc-2c56-46e5-b589-de4bfb024782","_version":2,"result":"updated","_shards":{"total":2,"successful":1,"failed":0},"created":false}"
+
+
+PUT /conductor/workflow/9c545883-d76d-493e-a56c-5554ce1e5846?timeout=1m HTTP/1.1" 201 181 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.029 req_body:"{"workflowType":"ephemeralKitchenSinkEphemeralTasks","version":1,"workflowId":"9c545883-d76d-493e-a56c-5554ce1e5846","startTime":"2019-12-27T12:10:17.238Z","status":"RUNNING","input":"{task2Name=task_10005}","output":"{}","executionTime":0,"inputSize":22,"outputSize":2}" resp_body:"{"_index":"conductor","_type":"workflow","_id":"9c545883-d76d-493e-a56c-5554ce1e5846","_version":1,"result":"created","_shards":{"total":2,"successful":1,"failed":0},"created":true}
+
+
+PUT /conductor/workflow/9c545883-d76d-493e-a56c-5554ce1e5846?timeout=1m HTTP/1.1" 200 182 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.007 req_body:"{"workflowType":"ephemeralKitchenSinkEphemeralTasks","version":1,"workflowId":"9c545883-d76d-493e-a56c-5554ce1e5846","startTime":"2019-12-27T12:10:17.238Z","updateTime":"2019-12-27T12:10:17.286Z","status":"RUNNING","input":"{task2Name=task_10005}","output":"{}","executionTime":0,"inputSize":22,"outputSize":2}" resp_body:"{"_index":"conductor","_type":"workflow","_id":"9c545883-d76d-493e-a56c-5554ce1e5846","_version":2,"result":"updated","_shards":{"total":2,"successful":1,"failed":0},"created":false}
+
+
+
+POST /conductor/workflow/_search?typed_keys=true&ignore_unavailable=false&expand_wildcards=open&allow_no_indices=true&search_type=query_then_fetch&batched_reduce_size=512 HTTP/1.1" 200 1435 "" "Apache-HttpAsyncClient/4.1.2 (Java/1.8.0_212)" 0.045 req_body:"{"from":0,"size":100,"query":{"bool":{"must":[{"query_string":{"query":"*","fields":[],"use_dis_max":true,"tie_breaker":0.0,"default_operator":"or","auto_generate_phrase_queries":false,"max_determinized_states":10000,"enable_position_increments":true,"fuzziness":"AUTO","fuzzy_prefix_length":0,"fuzzy_max_expansions":50,"phrase_slop":0,"escape":false,"split_on_whitespace":true,"boost":1.0}},{"bool":{"must":[{"match_all":{"boost":1.0}}],"disable_coord":false,"adjust_pure_negative":true,"boost":1.0}}],"disable_coord":false,"adjust_pure_negative":true,"boost":1.0}},"sort":[{"startTime":{"order":"desc"}}]}" resp_body:"{"took":24,"timed_out":false,"_shards":{"total":5,"successful":5,"skipped":0,"failed":0},"hits":{"total":3,"max_score":null,"hits":[{"_index":"conductor","_type":"workflow","_id":"9c545883-d76d-493e-a56c-5554ce1e5846","_score":null,"_source":{"workflowType":"ephemeralKitchenSinkEphemeralTasks","version":1,"workflowId":"9c545883-d76d-493e-a56c-5554ce1e5846","startTime":"2019-12-27T12:10:17.238Z","updateTime":"2019-12-27T12:10:17.286Z","status":"RUNNING","input":"{task2Name=task_10005}","output":"{}","executionTime":0,"inputSize":22,"outputSize":2},"sort":[1577448617238]},{"_index":"conductor","_type":"workflow","_id":"d3a4a1dc-2c56-46e5-b589-de4bfb024782","_score":null,"_source":{"workflowType":"ephemeralKitchenSinkStoredTasks","version":1,"workflowId":"d3a4a1dc-2c56-46e5-b589-de4bfb024782","startTime":"2019-12-27T12:10:17.162Z","updateTime":"2019-12-27T12:10:17.187Z","status":"RUNNING","input":"{task2Name=task_5}","output":"{}","executionTime":0,"inputSize":18,"outputSize":2},"sort":[1577448617162]},{"_index":"conductor","_type":"workflow","_id":"193f4a0f-00e0-4396-9d20-3d13e28ae7b3","_score":null,"_source":{"workflowType":"kitchensink","version":1,"workflowId":"193f4a0f-00e0-4396-9d20-3d13e28ae7b3","startTime":"2019-12-27T12:10:16.601Z","updateTime":"2019-12-27T12:10:17.027Z","status":"RUNNING","input":"{task2Name=task_5}","output":"{}","executionTime":0,"inputSize":18,"outputSize":2},"sort":[1577448616601]}]}}
+
+

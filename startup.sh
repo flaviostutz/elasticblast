@@ -2,8 +2,8 @@
 set -e
 set -x
 
-echo "Starting backtor..."
-backtor \
-    --elasticsearch-url=$ELASTICSEARCH_URL \
+echo "Starting elasticblast..."
+elasticblast \
+    --blast-url=$BLAST_URL \
     --log-level=$LOG_LEVEL
 

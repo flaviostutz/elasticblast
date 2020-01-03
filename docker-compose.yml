@@ -2,12 +2,22 @@ version: '3.5'
 
 services:
 
-  bridge:
+  proxy:
+    image: flaviostutz/nginx-cache-proxy:1.8.4
+    ports:
+      - 7000:80
+    environment:
+      - REQUEST_LOG_LEVEL=body
+      # - PROXY_PASS_URL=http://elasticsearch:9200/
+      - PROXY_PASS_URL=http://elasticblast:8200/
+      - PROXY_READ_TIMEOUT=60s
+
+  elasticblast:
     build: .
-    image: flaviostutz/elasticsearch-blast-bridge
+    image: flaviostutz/elasticblast
     restart: always
     ports:
-      - 9200:9200
+      - 8200:8200
     environment:
       - LOG_LEVEL=debug
       - BLAST_URL=http://blast:6000
@@ -18,13 +28,15 @@ services:
       - 6000:6000
 
   conductor-server:
-    image: flaviostutz/conductor-server
+    image: flaviostutz/conductor-server:2.12.1.6
     restart: always
     ports:
       - 8080:8080
     environment:
       - DYNOMITE_HOSTS=dynomite:8102:us-east-1c
-      - ELASTICSEARCH_URL=http://bridge:9200
+      - ELASTICSEARCH_URL=http://proxy:80/
+      # - ELASTICSEARCH_URL=http://elasticsearch:9200/
+      # - ELASTICSEARCH_URL=http://elasticblast:8200/
       - LOADSAMPLE=true
       - PROVISIONING_UPDATE_EXISTING_TASKS=false
 
@@ -38,6 +50,18 @@ services:
     image: flaviostutz/conductor-ui
     restart: always
     environment:
-      - WF_SERVER=http://backtor-conductor:8080/api/
+      - WF_SERVER=http://conductor-server:8080/api/
     ports:
       - 5000:5000
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:5.6.8
+    environment:
+      - "ES_JAVA_OPTS=-Xms512m -Xmx2000m"
+      - transport.host=0.0.0.0
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ports:
+      - 9200:9200
+      - 9300:9300
+
