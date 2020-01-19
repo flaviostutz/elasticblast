@@ -1,0 +1,269 @@
+{
+	"info": {
+		"_postman_id": "37809302-1e0e-425d-8607-02847f41191a",
+		"name": "Elasticblast",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "/_cluster/health?timeout=30s&wait_for_status=green",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8200/_cluster/health?timeout=30s&wait_for_status=green",
+					"host": [
+						"localhost"
+					],
+					"port": "8200",
+					"path": [
+						"_cluster",
+						"health"
+					],
+					"query": [
+						{
+							"key": "timeout",
+							"value": "30s"
+						},
+						{
+							"key": "wait_for_status",
+							"value": "green"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/testi/testm/abcid",
+			"request": {
+				"method": "HEAD",
+				"header": [],
+				"url": {
+					"raw": "localhost:8200/testi/testm/abcid",
+					"host": [
+						"localhost"
+					],
+					"port": "8200",
+					"path": [
+						"testi",
+						"testm",
+						"abcid"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/testi/testm/abcid",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"workflowType\":\"kitchensink\",\"version\":1,\"workflowId\":\"193f4a0f-00e0-4396-9d20-3d13e28ae7b3\",\"startTime\":\"2019-12-27T12:10:16.601Z\",\"status\":\"RUNNING\",\"input\":\"{task2Name=task_5}\",\"output\":\"{}\",\"executionTime\":0,\"inputSize\":18,\"outputSize\":2}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8200/testi/testm/abcid",
+					"host": [
+						"localhost"
+					],
+					"port": "8200",
+					"path": [
+						"testi",
+						"testm",
+						"abcid"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/_template/templatetest",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\"order\": 0,\n\"template\": \"*task*log*\",\n\"settings\": {\n    \"index\": {\n        \"refresh_interval\": \"1s\"\n    }\n},\n\"mappings\": {\n    \"event\": {\n        \"properties\": {\n            \"action\": {\n                \"type\": \"keyword\",\n                \"index\": true\n            },\n            \"created\": {\n                \"type\": \"long\"\n            },\n            \"event\": {\n                \"type\": \"keyword\",\n                \"index\": true\n            },\n            \"id\": {\n                \"type\": \"keyword\",\n                \"index\": true\n            },\n            \"messageId\": {\n                \"type\": \"keyword\",\n                \"index\": true\n            },\n            \"name\": {\n                \"type\": \"keyword\",\n                \"index\": true\n            },\n            \"output\": {\n                \"properties\": {\n                    \"workflowId\": {\n                        \"type\": \"keyword\",\n                        \"index\": true\n                    }\n                }\n            },\n            \"status\": {\n                \"type\": \"keyword\",\n                \"index\": true\n            }\n        }\n    },\n    \"task_log\": {\n        \"properties\": {\n            \"createdTime\": {\n                \"type\": \"long\"\n            },\n            \"log\": {\n                \"type\": \"keyword\",\n                \"index\": true\n            },\n            \"taskId\": {\n                \"type\": \"keyword\",\n                \"index\": true\n            }\n        }\n    },\n    \"message\": {\n        \"properties\": {\n            \"created\": {\n                \"type\": \"long\"\n            },\n            \"messageId\": {\n                \"type\": \"keyword\",\n                \"index\": true\n            },\n            \"payload\": {\n                \"type\": \"keyword\",\n                \"index\": true\n            },\n            \"queue\": {\n                \"type\": \"keyword\",\n                \"index\": true\n            }\n        }\n    }\n},\n\"aliases\": {}\n}\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8200/_template/templatetest",
+					"host": [
+						"localhost"
+					],
+					"port": "8200",
+					"path": [
+						"_template",
+						"templatetest"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/testi/_mapping/testm",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"type": "text",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"workflow\": {\n\"properties\": {\n  \"correlationId\": {\n    \"type\": \"keyword\",\n    \"index\": true,\n    \"doc_values\": true\n  },\n  \"endTime\": {\n    \"type\": \"date\",\n    \"format\": \"strict_date_optional_time||epoch_millis\",\n    \"doc_values\": true\n  },\n  \"executionTime\": {\n    \"type\": \"long\",\n    \"doc_values\": true\n  },\n  \"failedReferenceTaskNames\": {\n    \"type\": \"text\",\n    \"index\": false\n  },\n  \"input\": {\n    \"type\": \"text\",\n    \"index\": true\n  },\n  \"output\": {\n    \"type\": \"text\",\n    \"index\": true\n  },\n  \"reasonForIncompletion\": {\n    \"type\": \"keyword\",\n    \"index\": true,\n    \"doc_values\": true\n  },\n  \"startTime\": {\n    \"type\": \"date\",\n    \"format\": \"strict_date_optional_time||epoch_millis\",\n    \"doc_values\": true\n  },\n  \"status\": {\n    \"type\": \"keyword\",\n    \"index\": true,\n    \"doc_values\": true\n  },\n  \"updateTime\": {\n    \"type\": \"date\",\n    \"format\": \"strict_date_optional_time||epoch_millis\",\n    \"doc_values\": true\n  },\n  \"version\": {\n    \"type\": \"long\",\n    \"doc_values\": true\n  },\n  \"workflowId\": {\n    \"type\": \"keyword\",\n    \"index\": true,\n    \"doc_values\": true\n  },\n  \"workflowType\": {\n    \"type\": \"keyword\",\n    \"index\": true,\n    \"doc_values\": true\n  },\n  \"rawJSON\": {\n    \"type\": \"text\",\n    \"index\": false\n  },\n  \"event\": {\n    \"type\": \"keyword\",\n    \"index\": true\n  }\n}\n  }\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8200/testi/_mapping/testm",
+					"host": [
+						"localhost"
+					],
+					"port": "8200",
+					"path": [
+						"testi",
+						"_mapping",
+						"testm"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/testi",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"type": "text",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "localhost:8200/testi",
+					"host": [
+						"localhost"
+					],
+					"port": "8200",
+					"path": [
+						"testi"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/testi",
+			"request": {
+				"method": "HEAD",
+				"header": [
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"type": "text",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "localhost:8200/testi",
+					"host": [
+						"localhost"
+					],
+					"port": "8200",
+					"path": [
+						"testi"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/testi/_mapping/testm",
+			"request": {
+				"method": "HEAD",
+				"header": [
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"type": "text",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "localhost:8200/testi/_mapping/testm",
+					"host": [
+						"localhost"
+					],
+					"port": "8200",
+					"path": [
+						"testi",
+						"_mapping",
+						"testm"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/_template/templatetest",
+			"request": {
+				"method": "HEAD",
+				"header": [
+					{
+						"key": "Content-Type",
+						"name": "Content-Type",
+						"type": "text",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "localhost:8200/_template/templatetest",
+					"host": [
+						"localhost"
+					],
+					"port": "8200",
+					"path": [
+						"_template",
+						"templatetest"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"protocolProfileBehavior": {}
+}

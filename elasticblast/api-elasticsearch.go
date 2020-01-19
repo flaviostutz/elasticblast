@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/mux"
@@ -14,14 +16,21 @@ import (
 func (h *HTTPServer) setupElasticsearchHandlers() {
 	h.router.HandleFunc("/_cluster/health", getClusterHealth).Methods("GET")
 
-	// h.router.HandleFunc("/_template/{template}", headTemplate).Methods("HEAD")
-	// h.router.PUT("/_template/:template", putTemplate)
-	// h.router.HEAD("/:indexname/_mapping/:mapping", headIndexMapping)
-	// h.router.PUT("/:indexname/_mapping/:mapping", putIndexMapping)
+	h.router.HandleFunc("/{indexname}/_mapping/{mapping}", headIndexMapping).Methods("HEAD")
+	h.router.HandleFunc("/{indexname}/_mapping/{mapping}", putIndexMapping).Methods("PUT")
+
 	h.router.HandleFunc("/{indexname}/{mapping}/{id}", headDocument).Methods("HEAD")
+	h.router.HandleFunc("/{indexname}/{mapping}/{id}", getDocument).Methods("GET")
 	h.router.HandleFunc("/{indexname}/{mapping}/{id}", putDocument).Methods("PUT")
-	// h.router.HEAD("/:indexname", headIndex)
-	// h.router.PUT("/:indexname", putIndex)
+	h.router.HandleFunc("/{indexname}/{mapping}/{id}/_update", updateDocument).Methods("POST")
+
+	h.router.HandleFunc("/{indexname}/{mapping}/_search", postSearch).Methods("POST")
+
+	h.router.HandleFunc("/_template/{template}", headTemplate).Methods("HEAD")
+	h.router.HandleFunc("/_template/{template}", putTemplate).Methods("PUT")
+
+	h.router.HandleFunc("/{indexname}", headIndex).Methods("HEAD")
+	h.router.HandleFunc("/{indexname}", putIndex).Methods("PUT")
 }
 
 func getClusterHealth(w http.ResponseWriter, r *http.Request) {
@@ -38,14 +47,30 @@ func headDocument(w http.ResponseWriter, r *http.Request) {
 	indexname := param(r, "indexname", "")
 	mapping := param(r, "mapping", "")
 	id := param(r, "id", "")
-	docid := fmt.Sprintf("_doc-%s-%s-%s", indexname, mapping, id)
-	logrus.Debugf("headDocument docid=%s", docid)
-	_, status, err := loadDocument(docid)
+
+	logrus.Debugf("headDocument indexname=%s mapping=%s id=%s", indexname, mapping, id)
+	_, status, err := loadDocument(indexname, mapping, id)
 	if err != nil {
-		// c.JSON(http.StatusOK, gin.H{})
 		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
 		return
 	}
+	jsonWrite(w, status, gin.H{})
+}
+
+func getDocument(w http.ResponseWriter, r *http.Request) {
+	indexname := param(r, "indexname", "")
+	mapping := param(r, "mapping", "")
+	id := param(r, "id", "")
+
+	logrus.Debugf("getDocument indexname=%s mapping=%s id=%s", indexname, mapping, id)
+	_, status, err := loadDocument(indexname, mapping, id)
+	if err != nil {
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+
+	//transform Blast query result in document search result
+
 	jsonWrite(w, status, gin.H{})
 }
 
@@ -53,8 +78,8 @@ func putDocument(w http.ResponseWriter, r *http.Request) {
 	indexname := param(r, "indexname", "")
 	mapping := param(r, "mapping", "")
 	id := param(r, "id", "")
-	docid := fmt.Sprintf("_doc-%s-%s-%s", indexname, mapping, id)
-	logrus.Debugf("putDocument docid=%s", docid)
+
+	logrus.Debugf("putDocument indexname=%s mapping=%s id=%s", indexname, mapping, id)
 
 	bb, _ := ioutil.ReadAll(r.Body)
 
@@ -65,143 +90,272 @@ func putDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	docdata["id"] = docid
-	setType(docdata, fmt.Sprintf("%s-%s", indexname, mapping))
-	err = storeDocument(docdata)
+	err = storeDocument(indexname, mapping, id, docdata)
 	if err != nil {
 		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
 		return
 	}
-	jsonWrite(w, http.StatusCreated, gin.H{})
+	jsonWrite(w, http.StatusCreated, gin.H{"_index": indexname, "_type": mapping, "_id": id, "_version": 1, "result": "created", "_shards": gin.H{"total": 2, "successful": 1, "failed": 0}, "created": true})
 }
 
-// func headIndex(c *gin.Context) {
-// 	indexname := c.Param("indexname")
-// 	s := fmt.Sprintf("_index-%s", indexname)
-// 	logrus.Debugf("headIndex index=%s", s)
-// 	_, status, err := loadDocument(s)
-// 	if err != nil {
-// 		// c.JSON(http.StatusOK, gin.H{})
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
-// 		return
-// 	}
-// 	c.JSON(status, gin.H{})
-// }
+func updateDocument(w http.ResponseWriter, r *http.Request) {
+	indexname := param(r, "indexname", "")
+	mapping := param(r, "mapping", "")
+	id := param(r, "id", "")
 
-// func putIndex(c *gin.Context) {
-// 	indexname := c.Param("indexname")
-// 	mapping := c.Param("mapping")
-// 	docid := fmt.Sprintf("_index-%s-%s", indexname, mapping)
-// 	logrus.Debugf("putIndex index=%s", docid)
+	logrus.Debugf("updateDocument indexname=%s mapping=%s id=%s", indexname, mapping, id)
 
-// 	bb, _ := ioutil.ReadAll(c.Request.Body)
+	bb, _ := ioutil.ReadAll(r.Body)
 
-// 	var docdata map[string]interface{}
-// 	err := json.Unmarshal(bb, &docdata)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
-// 		return
-// 	}
-
-// 	docdata["id"] = docid
-// 	setType(docdata, "_esindex")
-// 	err = storeDocument(docdata)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
-// 		return
-// 	}
-// 	c.JSON(http.StatusCreated, gin.H{})
-// }
-
-// func headIndexMapping(c *gin.Context) {
-// 	indexname := c.Param("indexname")
-// 	mapping := c.Param("mapping")
-// 	docid := fmt.Sprintf("_index-%s-%s", indexname, mapping)
-// 	logrus.Debugf("headIndexMapping index-mapping=%s", docid)
-
-// 	_, status, err := loadDocument(docid)
-// 	if err != nil {
-// 		// c.JSON(http.StatusOK, gin.H{})
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
-// 		return
-// 	}
-// 	c.JSON(status, gin.H{})
-// }
-
-// func putIndexMapping(c *gin.Context) {
-// 	indexname := c.Param("indexname")
-// 	mapping := c.Param("mapping")
-// 	docid := fmt.Sprintf("_index-%s-%s", indexname, mapping)
-// 	logrus.Debugf("putIndexMapping index-mapping=%s", docid)
-
-// 	bb, _ := ioutil.ReadAll(c.Request.Body)
-
-// 	var docdata map[string]interface{}
-// 	err := json.Unmarshal(bb, &docdata)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
-// 		return
-// 	}
-
-// 	docdata["id"] = docid
-// 	setType(docdata, "_esindexmapping")
-// 	err = storeDocument(docdata)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
-// 		return
-// 	}
-
-// 	c.JSON(http.StatusCreated, gin.H{})
-// }
-
-// func headTemplate(c *gin.Context) {
-// 	t := c.Param("template")
-// 	s := fmt.Sprintf("_template-%s", t)
-// 	logrus.Debugf("headTemplate template=%s", s)
-
-// 	_, status, err := loadDocument(s)
-// 	if err != nil {
-// 		//FIXME fix Blast and remove this later
-// 		c.JSON(http.StatusOK, gin.H{})
-// 		// c.JSON(http.StatusInternalServerError, gin.H{"error": err})
-// 		return
-// 	}
-// 	c.JSON(status, gin.H{})
-// }
-
-// func putTemplate(c *gin.Context) {
-// 	t := c.Param("template")
-// 	logrus.Debugf("putTemplate template=%s", t)
-
-// 	bb, _ := ioutil.ReadAll(c.Request.Body)
-
-// 	var docdata map[string]interface{}
-// 	err := json.Unmarshal(bb, &docdata)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
-// 		return
-// 	}
-
-// 	docid := fmt.Sprintf("_template-%s", t)
-// 	docdata["id"] = docid
-// 	setType(docdata, "_esindextemplate")
-// 	err = storeDocument(docdata)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
-// 		return
-// 	}
-
-// 	c.JSON(http.StatusCreated, gin.H{})
-// }
-
-func setType(docdata map[string]interface{}, dtype string) {
-	fields, exists := docdata["fields"]
-	if !exists {
-		fields = make(map[string]interface{})
-		docdata["fields"] = fields
+	var docdata map[string]interface{}
+	err := json.Unmarshal(bb, &docdata)
+	if err != nil {
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
 	}
-	f := fields.(map[string]interface{})
-	f["_type"] = dtype
+
+	doc, exists := docdata["doc"]
+	if !exists {
+		jsonWrite(w, http.StatusBadRequest, gin.H{"error": "doc field doesn't exist in json from post"})
+		return
+	}
+
+	doc0 := doc.(map[string]interface{})
+
+	archived, exists := doc0["archived"]
+	isarchived := false
+	if exists {
+		isarchived = archived.(bool)
+	}
+
+	rawJSON, exists := doc0["rawJSON"]
+	if !exists {
+		jsonWrite(w, http.StatusBadRequest, gin.H{"error": "rawJSON field doesn't exist in json from post"})
+		return
+	}
+	rawJSON0 := rawJSON.(string)
+	rawJSONUnesc := strings.ReplaceAll(rawJSON0, "\\\"", "\"")
+
+	var newdocdata map[string]interface{}
+	err = json.Unmarshal([]byte(rawJSONUnesc), &newdocdata)
+	if err != nil {
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+	newdocdata["_archived"] = isarchived
+
+	err = storeDocument(indexname, mapping, id, newdocdata)
+	if err != nil {
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+	jsonWrite(w, http.StatusCreated, gin.H{"_index": indexname, "_type": mapping, "_id": id, "_version": 1, "result": "updated", "_shards": gin.H{"total": 2, "successful": 1, "failed": 0}})
+}
+
+func headTemplate(w http.ResponseWriter, r *http.Request) {
+	template := param(r, "template", "")
+	s := fmt.Sprintf("_template-%s", template)
+	logrus.Debugf("headTemplate template=%s", s)
+
+	_, status, err := loadDocument("_internal", "_esindextemplate", s)
+	if err != nil {
+		//FIXME fix Blast and remove this later
+		// jsonWrite(w, http.StatusOK, gin.H{})
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+	jsonWrite(w, status, gin.H{})
+}
+
+func putTemplate(w http.ResponseWriter, r *http.Request) {
+	template := param(r, "template", "")
+	logrus.Debugf("putTemplate template=%s", template)
+
+	bb, _ := ioutil.ReadAll(r.Body)
+
+	var docdata map[string]interface{}
+	err := json.Unmarshal(bb, &docdata)
+	if err != nil {
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+
+	err = storeDocument("_internal", "_esindextemplate", template, docdata)
+	if err != nil {
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+
+	jsonWrite(w, http.StatusCreated, gin.H{"acknowledged": true})
+}
+
+func headIndexMapping(w http.ResponseWriter, r *http.Request) {
+	indexname := param(r, "indexname", "")
+	mapping := param(r, "mapping", "")
+	id := fmt.Sprintf("%s-%s", indexname, mapping)
+	logrus.Debugf("headIndexMapping id=%s", id)
+
+	_, status, err := loadDocument("_internal", "_esindexmapping", id)
+	if err != nil {
+		// c.JSON(http.StatusOK, gin.H{})
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+	jsonWrite(w, status, gin.H{})
+}
+
+func putIndexMapping(w http.ResponseWriter, r *http.Request) {
+	indexname := param(r, "indexname", "")
+	mapping := param(r, "mapping", "")
+	id := fmt.Sprintf("%s-%s", indexname, mapping)
+	logrus.Debugf("putIndexMapping id=%s", id)
+
+	bb, _ := ioutil.ReadAll(r.Body)
+
+	var docdata map[string]interface{}
+	err := json.Unmarshal(bb, &docdata)
+	if err != nil {
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+
+	err = storeDocument("_internal", "_esindexmapping", id, docdata)
+	if err != nil {
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+
+	jsonWrite(w, http.StatusCreated, gin.H{"acknowledged": true})
+}
+
+func headIndex(w http.ResponseWriter, r *http.Request) {
+	indexname := param(r, "indexname", "")
+	id := fmt.Sprintf("%s", indexname)
+	logrus.Debugf("headIndex id=%s", id)
+	_, status, err := loadDocument("_internal", "_esindex", id)
+	if err != nil {
+		// c.JSON(http.StatusOK, gin.H{})
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+	jsonWrite(w, status, gin.H{})
+}
+
+func putIndex(w http.ResponseWriter, r *http.Request) {
+	indexname := param(r, "indexname", "")
+	id := fmt.Sprintf("%s", indexname)
+	logrus.Debugf("putIndex index=%s", indexname)
+
+	docdata := make(map[string]interface{})
+
+	err := storeDocument("_internal", "_esindex", id, docdata)
+	if err != nil {
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+	jsonWrite(w, http.StatusCreated, gin.H{"acknowledged": true, "shards_acknowledged": true, "index": indexname})
+}
+
+func postSearch(w http.ResponseWriter, r *http.Request) {
+	indexname := param(r, "indexname", "")
+	mapping := param(r, "mapping", "")
+	logrus.Debugf("postSearch index=%s mapping=%s", indexname, mapping)
+
+	bb, _ := ioutil.ReadAll(r.Body)
+
+	var query map[string]interface{}
+	err := json.Unmarshal(bb, &query)
+	if err != nil {
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+
+	//ES REQUEST QUERY SAMPLE FROM CONDUCTOR
+	//POST /conductor/workflow/_search?typed_keys=true&ignore_unavailable=false&expand_wildcards=open&allow_no_indices=true&search_type=query_then_fetch&batched_reduce_size=512"
+	//req_body:"{"from":0,"size":100,"query":{"bool":{"must":[{"query_string":{"query":"*","fields":[],"use_dis_max":true,"tie_breaker":0.0,"default_operator":"or","auto_generate_phrase_queries":false,"max_determinized_states":10000,"enable_position_increments":true,"fuzziness":"AUTO","fuzzy_prefix_length":0,"fuzzy_max_expansions":50,"phrase_slop":0,"escape":false,"split_on_whitespace":true,"boost":1.0}},{"bool":{"must":[{"match_all":{"boost":1.0}}],"disable_coord":false,"adjust_pure_negative":true,"boost":1.0}}],"disable_coord":false,"adjust_pure_negative":true,"boost":1.0}},"sort":[{"startTime":{"order":"desc"}}]}"
+	logrus.Debugf("ES QUERY: %v", query)
+
+	//Transform ES query to Blast query
+	queryBlast := gin.H{
+		"search_request": gin.H{
+			"from":   0,
+			"size":   100,
+			"sort":   []string{"-timestamp"},
+			"fields": []string{"*"},
+			"query": gin.H{
+				"query": fmt.Sprintf("+_index:\"%s\" +_mapping:\"%s\"", indexname, mapping),
+			},
+		},
+	}
+
+	//BLAST QUERY
+	//{ "search_request": { "query": { "query": "+_all:internet" }, "size": 10, "from": 0, "fields": [ "*" ], "sort": [ "-_score", "_id", "-timestamp" ], "facets": { "Type count": { "size": 10, "field": "_type" }, "Timestamp range": { "size": 10, "field": "timestamp", "date_ranges": [ { "name": "2001 - 2010", "start": "2001-01-01T00:00:00Z", "end": "2010-12-31T23:59:59Z" }, { "name": "2011 - 2020", "start": "2011-01-01T00:00:00Z", "end": "2020-12-31T23:59:59Z" } ] } }, "highlight": { "style": "html", "fields": [ "title", "text" ] } }}
+
+	start := time.Now()
+	searchResult, status, err1 := searchDocument(queryBlast)
+	if err1 != nil {
+		jsonWrite(w, status, gin.H{"error": err1})
+		return
+	}
+	elapsed := time.Since(start)
+
+	//BLAST RESPONSE
+	//{ "search_result": { "status": { "total": 1, "failed": 0, "successful": 1 }, "request": { "query": { "query": "+_all:internet" }, "size": 10, "from": 0, "highlight": { "style": "html", "fields": [ "title", "text" ] }, "fields": [ "*" ], "facets": { "Timestamp range": { "size": 10, "field": "timestamp", "date_ranges": [ { "end": "2010-12-31T23:59:59Z", "name": "2001 - 2010", "start": "2001-01-01T00:00:00Z" }, { "end": "2020-12-31T23:59:59Z", "name": "2011 - 2020", "start": "2011-01-01T00:00:00Z" } ] }, "Type count": { "size": 10, "field": "_type" } }, "explain": false, "sort": [ "-_score", "_id", "-timestamp" ], "includeLocations": false, "search_after": null, "search_before": null }, "hits": [], "total_hits": 0, "max_score": 0, "took": 229700, "facets": { "Timestamp range": { "field": "timestamp", "total": 0, "missing": 0, "other": 0 }, "Type count": { "field": "_type", "total": 0, "missing": 0, "other": 0 } } }}
+	logrus.Debugf("BLAST RESPONSE: %v", searchResult)
+
+	sr, ok := searchResult["search_result"]
+	if !ok {
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Blast didn't not return a search_result field. response=%v", searchResult)})
+		return
+	}
+	sr0 := sr.(map[string]interface{})
+	hits, ok := sr0["hits"]
+	if !ok {
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Blast didn't not return a hits field. response=%v", searchResult)})
+		return
+	}
+
+	//convert BLAST response to ES response
+	hitsES := make([]gin.H, 0)
+	hits0 := hits.([]interface{})
+	for _, v := range hits0 {
+		v0 := v.(map[string]interface{})
+		vt, ok := v0["fields"]
+		if !ok {
+			jsonWrite(w, http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Blast didn't not return a result item with 'fields' field. response=%v", searchResult)})
+			return
+		}
+		vt0 := vt.(map[string]interface{})
+		vv := gin.H{
+			"_index":  vt0["_index"],
+			"_type":   vt0["_mapping"],
+			"_id":     vt0["_id"],
+			"_score":  nil,
+			"_source": vt0,
+			"sort":    []int64{0},
+		}
+		hitsES = append(hitsES, vv)
+	}
+
+	searchResultES := gin.H{
+		"took":      elapsed * time.Millisecond,
+		"timed_out": false,
+		"_shards": gin.H{
+			"total":      5,
+			"successful": 5,
+			"skipped":    0,
+			"failed":     0,
+		},
+		"hits": gin.H{
+			"total":     len(hitsES),
+			"max_score": nil,
+			"hits":      hitsES,
+		},
+	}
+
+	//ES RESPONSE {"took":24,"timed_out":false,"_shards":{"total":5,"successful":5,"skipped":0,"failed":0},"hits":{"total":3,"max_score":null,"hits":[{"_index":"conductor","_type":"workflow","_id":"9c545883-d76d-493e-a56c-5554ce1e5846","_score":null,"_source":{"workflowType":"ephemeralKitchenSinkEphemeralTasks","version":1,"workflowId":"9c545883-d76d-493e-a56c-5554ce1e5846","startTime":"2019-12-27T12:10:17.238Z","updateTime":"2019-12-27T12:10:17.286Z","status":"RUNNING","input":"{task2Name=task_10005}","output":"{}","executionTime":0,"inputSize":22,"outputSize":2},"sort":[1577448617238]},{"_index":"conductor","_type":"workflow","_id":"d3a4a1dc-2c56-46e5-b589-de4bfb024782","_score":null,"_source":{"workflowType":"ephemeralKitchenSinkStoredTasks","version":1,"workflowId":"d3a4a1dc-2c56-46e5-b589-de4bfb024782","startTime":"2019-12-27T12:10:17.162Z","updateTime":"2019-12-27T12:10:17.187Z","status":"RUNNING","input":"{task2Name=task_5}","output":"{}","executionTime":0,"inputSize":18,"outputSize":2},"sort":[1577448617162]},{"_index":"conductor","_type":"workflow","_id":"193f4a0f-00e0-4396-9d20-3d13e28ae7b3","_score":null,"_source":{"workflowType":"kitchensink","version":1,"workflowId":"193f4a0f-00e0-4396-9d20-3d13e28ae7b3","startTime":"2019-12-27T12:10:16.601Z","updateTime":"2019-12-27T12:10:17.027Z","status":"RUNNING","input":"{task2Name=task_5}","output":"{}","executionTime":0,"inputSize":18,"outputSize":2},"sort":[1577448616601]}]}}
+	logrus.Debugf("Emulated ES response: %s", searchResultES)
+	jsonWrite(w, http.StatusOK, searchResultES)
 }
 
 func jsonWrite(w http.ResponseWriter, statusCode int, result interface{}) {
