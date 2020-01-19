@@ -275,7 +275,6 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 	//PARSE ES QUERY AND CREATE A BLAST QUERY (this is not a compiler. we are being simplist here for some known cases of queries)
 	// value, dt, os, err := jsonparser.Get(bb, "query", "bool", "must")
 	blastQuery := ""
-
 	_, err1 := jsonparser.ArrayEach(bb, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 		logrus.Debugf("Value: '%s'\n Type: %s\n", string(value), dataType)
 
@@ -304,43 +303,17 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 
 		//process 'fields' field
 		_, err3 := jsonparser.ArrayEach(value, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
-			// /query/bool/must[]
-
-			terms, _, _, err4 := jsonparser.Get(value, "terms")
-			// /query/bool/must[]/terms
-			if err4 != nil {
-				logrus.Warnf("Json query parse error. err4=%s", err4)
-				return
-			}
-			// /query/bool/must[]/terms/
-			err5 := jsonparser.ObjectEach(terms, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
-				// /query/bool/must[]/terms/fieldname
-				// fmt.Printf("/query/bool/must[]/terms/fieldname Key: '%s'\n Value: '%s'\n Type: %s\n", string(key), string(value), dataType)
-
-				_, err6 := jsonparser.ArrayEach(value, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
-					// fmt.Printf("/query/bool/must[]/terms/fieldname/[]fieldvalues Value: '%s'\n Type: %s\n", string(value), dataType)
-					// /query/bool/must[]/terms/fieldname/[]fieldvalues
-					//ADD THIS FIELD TO BLAST QUERY
-					blastQuery = fmt.Sprintf("%s +%s:%s", blastQuery, strings.Trim(string(key), " "), string(value))
-				})
-				if err6 != nil {
-					logrus.Warnf("Json query parse error. err6=%s", err6)
-					return nil
-				}
-
-				return nil
-			})
-			if err5 != nil {
-				logrus.Warnf("Json query parse error. err5=%s", err5)
-				return
-			}
-
+			blastQuery = processTerms(value, blastQuery)
 		}, "bool", "must", "[0]", "bool", "must")
-		if err3 != nil {
-			logrus.Warnf("Json query parse error. err3=%s", err3)
+
+		_, err4 := jsonparser.ArrayEach(value, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+			blastQuery = processTerms(value, blastQuery)
+		}, "bool", "must")
+
+		if err3 != nil && err4 != nil {
+			logrus.Warnf("No valid field terms found. err3=%s err4=%s", err3, err4)
 			return
 		}
-
 	}, "query", "bool", "must")
 
 	if err1 != nil {
@@ -438,6 +411,36 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 	//ES RESPONSE {"took":24,"timed_out":false,"_shards":{"total":5,"successful":5,"skipped":0,"failed":0},"hits":{"total":3,"max_score":null,"hits":[{"_index":"conductor","_type":"workflow","_id":"9c545883-d76d-493e-a56c-5554ce1e5846","_score":null,"_source":{"workflowType":"ephemeralKitchenSinkEphemeralTasks","version":1,"workflowId":"9c545883-d76d-493e-a56c-5554ce1e5846","startTime":"2019-12-27T12:10:17.238Z","updateTime":"2019-12-27T12:10:17.286Z","status":"RUNNING","input":"{task2Name=task_10005}","output":"{}","executionTime":0,"inputSize":22,"outputSize":2},"sort":[1577448617238]},{"_index":"conductor","_type":"workflow","_id":"d3a4a1dc-2c56-46e5-b589-de4bfb024782","_score":null,"_source":{"workflowType":"ephemeralKitchenSinkStoredTasks","version":1,"workflowId":"d3a4a1dc-2c56-46e5-b589-de4bfb024782","startTime":"2019-12-27T12:10:17.162Z","updateTime":"2019-12-27T12:10:17.187Z","status":"RUNNING","input":"{task2Name=task_5}","output":"{}","executionTime":0,"inputSize":18,"outputSize":2},"sort":[1577448617162]},{"_index":"conductor","_type":"workflow","_id":"193f4a0f-00e0-4396-9d20-3d13e28ae7b3","_score":null,"_source":{"workflowType":"kitchensink","version":1,"workflowId":"193f4a0f-00e0-4396-9d20-3d13e28ae7b3","startTime":"2019-12-27T12:10:16.601Z","updateTime":"2019-12-27T12:10:17.027Z","status":"RUNNING","input":"{task2Name=task_5}","output":"{}","executionTime":0,"inputSize":18,"outputSize":2},"sort":[1577448616601]}]}}
 	logrus.Debugf("Emulated ES response: %s", searchResultES)
 	jsonWrite(w, http.StatusOK, searchResultES)
+}
+
+func processTerms(jsonValue []byte, blastQuery0 string) string {
+	blastQuery := blastQuery0
+	terms, _, _, err4 := jsonparser.Get(jsonValue, "terms")
+	// /query/bool/must[]/terms
+	if err4 != nil {
+		logrus.Warnf("Couldn't find terms array in json=%s", err4)
+		return blastQuery
+	}
+	// /query/bool/must[]/terms/
+	err := jsonparser.ObjectEach(terms, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
+		// /query/bool/must[]/terms/fieldname
+		// fmt.Printf("/query/bool/must[]/terms/fieldname Key: '%s'\n Value: '%s'\n Type: %s\n", string(key), string(value), dataType)
+
+		_, err1 := jsonparser.ArrayEach(value, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+			// fmt.Printf("/query/bool/must[]/terms/fieldname/[]fieldvalues Value: '%s'\n Type: %s\n", string(value), dataType)
+			// /query/bool/must[]/terms/fieldname/[]fieldvalues
+			//ADD THIS FIELD TO BLAST QUERY
+			blastQuery = fmt.Sprintf("%s +%s:%s", blastQuery, strings.Trim(string(key), " "), string(value))
+		})
+		if err1 != nil {
+			logrus.Warnf("Cannot parse terms array. err6=%s", err1)
+		}
+		return nil
+	})
+	if err != nil {
+		logrus.Warnf("Cannot parse terms attribute. err=%s", err)
+	}
+	return blastQuery
 }
 
 func jsonWrite(w http.ResponseWriter, statusCode int, result interface{}) {
