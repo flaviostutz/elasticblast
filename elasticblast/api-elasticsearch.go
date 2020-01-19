@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buger/jsonparser"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -269,11 +270,92 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
 		return
 	}
+	logrus.Debugf("ES QUERY: %v", query)
+
+	//PARSE ES QUERY AND CREATE A BLAST QUERY (this is not a compiler. we are being simplist here for some known cases of queries)
+	// value, dt, os, err := jsonparser.Get(bb, "query", "bool", "must")
+	blastQuery := ""
+
+	_, err1 := jsonparser.ArrayEach(bb, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+		logrus.Debugf("Value: '%s'\n Type: %s\n", string(value), dataType)
+
+		//process 'query_string' field
+		q, _, _, err2 := jsonparser.Get(value, "query_string", "query")
+		if err2 == nil {
+			qs := string(q)
+			//use only first term
+			qs1 := strings.Split(qs, " AND ")
+			for _, qv := range qs1 {
+				//specific field query
+				if strings.Contains(qv, ":") {
+					av := strings.Split(qv, ":")
+					//looks like a timestamp range query and we don't support yet. ignore term
+					if !strings.Contains(av[1], "[") {
+						blastQuery = fmt.Sprintf("%s +%s:%s", blastQuery, strings.Trim(av[0], " "), av[1])
+					}
+
+				} else {
+					//all fields query
+					blastQuery = fmt.Sprintf("%s +_all:%s", blastQuery, qv)
+				}
+			}
+			return
+		}
+
+		//process 'fields' field
+		_, err3 := jsonparser.ArrayEach(value, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+			// /query/bool/must[]
+
+			terms, _, _, err4 := jsonparser.Get(value, "terms")
+			// /query/bool/must[]/terms
+			if err4 != nil {
+				logrus.Warnf("Json query parse error. err4=%s", err4)
+				return
+			}
+			// /query/bool/must[]/terms/
+			err5 := jsonparser.ObjectEach(terms, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
+				// /query/bool/must[]/terms/fieldname
+				// fmt.Printf("/query/bool/must[]/terms/fieldname Key: '%s'\n Value: '%s'\n Type: %s\n", string(key), string(value), dataType)
+
+				_, err6 := jsonparser.ArrayEach(value, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+					// fmt.Printf("/query/bool/must[]/terms/fieldname/[]fieldvalues Value: '%s'\n Type: %s\n", string(value), dataType)
+					// /query/bool/must[]/terms/fieldname/[]fieldvalues
+					//ADD THIS FIELD TO BLAST QUERY
+					blastQuery = fmt.Sprintf("%s +%s:%s", blastQuery, strings.Trim(string(key), " "), string(value))
+				})
+				if err6 != nil {
+					logrus.Warnf("Json query parse error. err6=%s", err6)
+					return nil
+				}
+
+				return nil
+			})
+			if err5 != nil {
+				logrus.Warnf("Json query parse error. err5=%s", err5)
+				return
+			}
+
+		}, "bool", "must", "[0]", "bool", "must")
+		if err3 != nil {
+			logrus.Warnf("Json query parse error. err3=%s", err3)
+			return
+		}
+
+	}, "query", "bool", "must")
+
+	if err1 != nil {
+		logrus.Warnf("Json query parse error. Ignoring query terms. err=%s", err1)
+		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+
+	logrus.Debugf("BLAST QUERY=%s", blastQuery)
+
+	// logrus.Debugf("SEARCH value=%s dt=%s os=%v err=%s", value, dt, os, err)
 
 	//ES REQUEST QUERY SAMPLE FROM CONDUCTOR
 	//POST /conductor/workflow/_search?typed_keys=true&ignore_unavailable=false&expand_wildcards=open&allow_no_indices=true&search_type=query_then_fetch&batched_reduce_size=512"
 	//req_body:"{"from":0,"size":100,"query":{"bool":{"must":[{"query_string":{"query":"*","fields":[],"use_dis_max":true,"tie_breaker":0.0,"default_operator":"or","auto_generate_phrase_queries":false,"max_determinized_states":10000,"enable_position_increments":true,"fuzziness":"AUTO","fuzzy_prefix_length":0,"fuzzy_max_expansions":50,"phrase_slop":0,"escape":false,"split_on_whitespace":true,"boost":1.0}},{"bool":{"must":[{"match_all":{"boost":1.0}}],"disable_coord":false,"adjust_pure_negative":true,"boost":1.0}}],"disable_coord":false,"adjust_pure_negative":true,"boost":1.0}},"sort":[{"startTime":{"order":"desc"}}]}"
-	logrus.Debugf("ES QUERY: %v", query)
 
 	//Transform ES query to Blast query
 	queryBlast := gin.H{
@@ -283,7 +365,7 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 			"sort":   []string{"-timestamp"},
 			"fields": []string{"*"},
 			"query": gin.H{
-				"query": fmt.Sprintf("+_index:\"%s\" +_mapping:\"%s\"", indexname, mapping),
+				"query": fmt.Sprintf("+_index:\"%s\" +_mapping:\"%s\" %s", indexname, mapping, blastQuery),
 			},
 		},
 	}
