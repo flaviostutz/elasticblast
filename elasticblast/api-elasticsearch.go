@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/buger/jsonparser"
 	"github.com/gin-gonic/gin"
@@ -274,6 +273,7 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 
 	//PARSE ES QUERY AND CREATE A BLAST QUERY (this is not a compiler. we are being simplist here for some known cases of queries)
 	// value, dt, os, err := jsonparser.Get(bb, "query", "bool", "must")
+	fieldsBlast := []string{}
 	blastQuery := ""
 	_, err1 := jsonparser.ArrayEach(bb, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 		logrus.Debugf("Value: '%s'\n Type: %s\n", string(value), dataType)
@@ -282,6 +282,7 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 		q, _, _, err2 := jsonparser.Get(value, "query_string", "query")
 		if err2 == nil {
 			qs := string(q)
+
 			//use only first term
 			qs1 := strings.Split(qs, " AND ")
 			for _, qv := range qs1 {
@@ -298,10 +299,23 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 					blastQuery = fmt.Sprintf("%s +_all:%s", blastQuery, qv)
 				}
 			}
+
+			//process 'query_string' selected fields
+			_, err6 := jsonparser.ArrayEach(value, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+				fieldName := string(value)
+				fieldsBlast = append(fieldsBlast, fieldName)
+			}, "query_string", "fields")
+			if err6 != nil {
+				logrus.Debugf("No fields found for query string. err6=%s", err6)
+			}
+			if len(fieldsBlast) == 0 {
+				fieldsBlast = []string{"*"}
+			}
+
 			return
 		}
 
-		//process 'fields' field
+		//process field query matches
 		_, err3 := jsonparser.ArrayEach(value, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 			blastQuery = processTerms(value, blastQuery)
 		}, "bool", "must", "[0]", "bool", "must")
@@ -317,12 +331,32 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 	}, "query", "bool", "must")
 
 	if err1 != nil {
-		logrus.Warnf("Json query parse error. Ignoring query terms. err=%s", err1)
+		logrus.Debugf("Json query parse error. Ignoring query terms. err=%s", err1)
 		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
 		return
 	}
 
 	logrus.Debugf("BLAST QUERY=%s", blastQuery)
+
+	//SORT BLAST
+	sortBlast := []string{}
+	_, err5 := jsonparser.ArrayEach(bb, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+		jsonparser.ObjectEach(value, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
+			fieldName := string(key)
+			fieldOrder := "+"
+			order, _, _, err9 := jsonparser.Get(value, "order")
+			if err9 == nil {
+				if string(order) == "desc" {
+					fieldOrder = "-"
+				}
+			}
+			sortBlast = append(sortBlast, fmt.Sprintf("%s%s", fieldOrder, fieldName))
+			return nil
+		})
+	}, "sort")
+	if err5 != nil {
+		logrus.Debugf("Not sort attribute found. err=%s", err)
+	}
 
 	// logrus.Debugf("SEARCH value=%s dt=%s os=%v err=%s", value, dt, os, err)
 
@@ -335,8 +369,8 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 		"search_request": gin.H{
 			"from":   0,
 			"size":   100,
-			"sort":   []string{"-timestamp"},
-			"fields": []string{"*"},
+			"sort":   sortBlast,
+			"fields": fieldsBlast,
 			"query": gin.H{
 				"query": fmt.Sprintf("+_index:\"%s\" +_mapping:\"%s\" %s", indexname, mapping, blastQuery),
 			},
@@ -346,13 +380,11 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 	//BLAST QUERY
 	//{ "search_request": { "query": { "query": "+_all:internet" }, "size": 10, "from": 0, "fields": [ "*" ], "sort": [ "-_score", "_id", "-timestamp" ], "facets": { "Type count": { "size": 10, "field": "_type" }, "Timestamp range": { "size": 10, "field": "timestamp", "date_ranges": [ { "name": "2001 - 2010", "start": "2001-01-01T00:00:00Z", "end": "2010-12-31T23:59:59Z" }, { "name": "2011 - 2020", "start": "2011-01-01T00:00:00Z", "end": "2020-12-31T23:59:59Z" } ] } }, "highlight": { "style": "html", "fields": [ "title", "text" ] } }}
 
-	start := time.Now()
 	searchResult, status, err1 := searchDocument(queryBlast)
 	if err1 != nil {
 		jsonWrite(w, status, gin.H{"error": err1})
 		return
 	}
-	elapsed := time.Since(start)
 
 	//BLAST RESPONSE
 	//{ "search_result": { "status": { "total": 1, "failed": 0, "successful": 1 }, "request": { "query": { "query": "+_all:internet" }, "size": 10, "from": 0, "highlight": { "style": "html", "fields": [ "title", "text" ] }, "fields": [ "*" ], "facets": { "Timestamp range": { "size": 10, "field": "timestamp", "date_ranges": [ { "end": "2010-12-31T23:59:59Z", "name": "2001 - 2010", "start": "2001-01-01T00:00:00Z" }, { "end": "2020-12-31T23:59:59Z", "name": "2011 - 2020", "start": "2011-01-01T00:00:00Z" } ] }, "Type count": { "size": 10, "field": "_type" } }, "explain": false, "sort": [ "-_score", "_id", "-timestamp" ], "includeLocations": false, "search_after": null, "search_before": null }, "hits": [], "total_hits": 0, "max_score": 0, "took": 229700, "facets": { "Timestamp range": { "field": "timestamp", "total": 0, "missing": 0, "other": 0 }, "Type count": { "field": "_type", "total": 0, "missing": 0, "other": 0 } } }}
@@ -369,6 +401,12 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Blast didn't not return a hits field. response=%v", searchResult)})
 		return
 	}
+	took, ok := sr0["took"]
+	tookES := 123
+	if !ok {
+		logrus.Debugf("Not 'took' field found from Blast response")
+	}
+	tookES = int((took.(float64)) / float64(1000000))
 
 	//convert BLAST response to ES response
 	hitsES := make([]gin.H, 0)
@@ -393,7 +431,7 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	searchResultES := gin.H{
-		"took":      elapsed * time.Millisecond,
+		"took":      tookES,
 		"timed_out": false,
 		"_shards": gin.H{
 			"total":      5,
@@ -418,7 +456,7 @@ func processTerms(jsonValue []byte, blastQuery0 string) string {
 	terms, _, _, err4 := jsonparser.Get(jsonValue, "terms")
 	// /query/bool/must[]/terms
 	if err4 != nil {
-		logrus.Warnf("Couldn't find terms array in json=%s", err4)
+		logrus.Debugf("Couldn't find terms array in json=%s", err4)
 		return blastQuery
 	}
 	// /query/bool/must[]/terms/
@@ -433,12 +471,12 @@ func processTerms(jsonValue []byte, blastQuery0 string) string {
 			blastQuery = fmt.Sprintf("%s +%s:%s", blastQuery, strings.Trim(string(key), " "), string(value))
 		})
 		if err1 != nil {
-			logrus.Warnf("Cannot parse terms array. err6=%s", err1)
+			logrus.Debugf("Cannot parse terms array. err6=%s", err1)
 		}
 		return nil
 	})
 	if err != nil {
-		logrus.Warnf("Cannot parse terms attribute. err=%s", err)
+		logrus.Debugf("Cannot parse terms attribute. err=%s", err)
 	}
 	return blastQuery
 }

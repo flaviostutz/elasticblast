@@ -66,6 +66,69 @@ curl --location --request POST 'localhost:8200/testi/testm/_search?typed_keys=tr
 }'
 ```
 
+## Current ES search query support
+
+* from
+* size
+* sort
+* bool.must.search_query.query - only one term
+* bool.must.search_query.fields
+* bool.must.terms
+
+Supported ES query example:
+
+```json
+{
+    "from": 0,
+    "size": 100,
+    "query": {
+        "bool": {
+            "must": [
+                {
+                    "query_string": {
+                        "query": "\"task2Name\"",
+                        "fields": ["startTime"]
+                    }
+                },
+		        {
+				"bool": {
+		            "must": [
+		              {
+		                "bool": {
+		                  "must": [
+		                    {
+		                      "terms": {
+		                        "workflowType": [
+		                          "kitchensink"
+		                        ]
+		                      }
+		                    },
+		                    {
+		                      "terms": {
+		                        "status": [
+		                          "RUNNING"
+		                        ]
+		                      }
+		                    }
+		                  ]
+		                }
+		              }
+		            ]
+		          }
+		        }
+            ]
+        }
+    },
+    "sort": [
+        {
+            "startTime": {
+                "order": "desc"
+            }
+        }
+    ]
+}
+```
+
 ## Warning
 
 As a complete adapter would be too expensive to implement, so some features from ES are ignored. We will evolve this adapter as needed. Currently basic Document creation, update and search is implemented.
