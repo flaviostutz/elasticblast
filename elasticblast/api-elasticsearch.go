@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/buger/jsonparser"
 	"github.com/gin-gonic/gin"
@@ -276,28 +278,50 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 	fieldsBlast := []string{}
 	blastQuery := ""
 	_, err1 := jsonparser.ArrayEach(bb, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
-		logrus.Debugf("Value: '%s'\n Type: %s\n", string(value), dataType)
+		// logrus.Debugf("Value: '%s'", string(value))
 
 		//process 'query_string' field
 		q, _, _, err2 := jsonparser.Get(value, "query_string", "query")
 		if err2 == nil {
 			qs := string(q)
+			logrus.Debugf("Found text query=%s", qs)
 
-			//use only first term
 			qs1 := strings.Split(qs, " AND ")
 			for _, qv := range qs1 {
-				//specific field query
-				if strings.Contains(qv, ":") {
-					av := strings.Split(qv, ":")
-					//looks like a timestamp range query and we don't support yet. ignore term
-					if !strings.Contains(av[1], "[") {
-						blastQuery = fmt.Sprintf("%s +%s:%s", blastQuery, strings.Trim(av[0], " "), av[1])
+				logrus.Debugf("Processing boolean term '%s'", qv)
+
+				r1 := regexp.MustCompile("([A-Za-z0-9_-]*):(.*)")
+				rr1 := r1.FindAllStringSubmatch(qv, -1)
+
+				//SPECIFIC FIELD MATCH EXPRESSION
+				if len(rr1) > 0 {
+					fieldName := rr1[0][1]
+					fieldExpr := rr1[0][2]
+					logrus.Debugf("Found field value expression query. fieldName=%s. fieldExpr=%s", fieldName, fieldExpr)
+
+					r2 := regexp.MustCompile("\\[(.*) TO (.*)\\]")
+					rr2 := r2.FindAllStringSubmatch(fieldExpr, -1)
+
+					//RANGE EXPR
+					if len(rr2) > 0 {
+						fromExpr := rr2[0][1]
+						toExpr := rr2[0][2]
+						logrus.Debugf("Found range expression query. fromExpr=%s toExpr=%s", fromExpr, toExpr)
+						fromBlast := convertToBlastExpr(fromExpr)
+						toBlast := convertToBlastExpr(toExpr)
+						blastQuery = fmt.Sprintf("%s +%s:>=%s +%s:<=%s", blastQuery, fieldName, fromBlast, fieldName, toBlast)
+						logrus.Debugf("Expression query converted to Blast. blastQuery=%s", blastQuery)
+						continue
 					}
 
-				} else {
-					//all fields query
-					blastQuery = fmt.Sprintf("%s +_all:%s", blastQuery, qv)
+					//EXACT EXPR
+					blastQuery = fmt.Sprintf("%s +%s:%s", blastQuery, fieldName, fieldExpr)
+					continue
 				}
+
+				//ANY FIELD MATCH EXPRESSION
+				blastQuery = fmt.Sprintf("%s +_all:%s", blastQuery, qv)
+				logrus.Debugf("Found simple text query expression. expr=%s", blastQuery)
 			}
 
 			//process 'query_string' selected fields
@@ -306,12 +330,11 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 				fieldsBlast = append(fieldsBlast, fieldName)
 			}, "query_string", "fields")
 			if err6 != nil {
-				logrus.Debugf("No fields found for query string. err6=%s", err6)
+				logrus.Debugf("No fields selected in query string. err6=%s", err6)
 			}
 			if len(fieldsBlast) == 0 {
 				fieldsBlast = []string{"*"}
 			}
-
 			return
 		}
 
@@ -325,13 +348,12 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 		}, "bool", "must")
 
 		if err3 != nil && err4 != nil {
-			logrus.Warnf("No valid field terms found. err3=%s err4=%s", err3, err4)
-			return
+			logrus.Debugf("No valid field terms found. err3=%s err4=%s", err3, err4)
 		}
 	}, "query", "bool", "must")
 
 	if err1 != nil {
-		logrus.Debugf("Json query parse error. Ignoring query terms. err=%s", err1)
+		logrus.Debugf("Json query parse error. Ignoring query terms. err1=%s", err1)
 		jsonWrite(w, http.StatusInternalServerError, gin.H{"error": err})
 		return
 	}
@@ -382,7 +404,7 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 
 	searchResult, status, err1 := searchDocument(queryBlast)
 	if err1 != nil {
-		jsonWrite(w, status, gin.H{"error": err1})
+		jsonWrite(w, status, gin.H{"error": err1, "blast_request_status": status})
 		return
 	}
 
@@ -453,10 +475,10 @@ func postSearch(w http.ResponseWriter, r *http.Request) {
 
 func processTerms(jsonValue []byte, blastQuery0 string) string {
 	blastQuery := blastQuery0
-	terms, _, _, err4 := jsonparser.Get(jsonValue, "terms")
+	terms, _, _, err9 := jsonparser.Get(jsonValue, "terms")
 	// /query/bool/must[]/terms
-	if err4 != nil {
-		logrus.Debugf("Couldn't find terms array in json=%s", err4)
+	if err9 != nil {
+		logrus.Debugf("terms attribute not found. Skipping. err9=%s", err9)
 		return blastQuery
 	}
 	// /query/bool/must[]/terms/
@@ -471,7 +493,7 @@ func processTerms(jsonValue []byte, blastQuery0 string) string {
 			blastQuery = fmt.Sprintf("%s +%s:%s", blastQuery, strings.Trim(string(key), " "), string(value))
 		})
 		if err1 != nil {
-			logrus.Debugf("Cannot parse terms array. err6=%s", err1)
+			logrus.Debugf("Attribute is not an array. Skipping. err1=%s", err1)
 		}
 		return nil
 	})
@@ -479,6 +501,44 @@ func processTerms(jsonValue []byte, blastQuery0 string) string {
 		logrus.Debugf("Cannot parse terms attribute. err=%s", err)
 	}
 	return blastQuery
+}
+
+func convertToBlastExpr(expr string) string {
+	logrus.Debugf("convertToBlastExpr %s", expr)
+
+	r1 := regexp.MustCompile("(now)([-+]{1})([0-9]{1,99}[hms]{1})")
+	rr1 := r1.FindAllStringSubmatch(expr, -1)
+
+	//simple time expr
+	if expr == "now" {
+		return fmt.Sprintf("\"%s\"", time.Now().Format(time.RFC3339))
+	}
+
+	//additive time expr
+	if len(rr1) > 0 {
+		operator := rr1[0][2]
+		duration := rr1[0][3]
+		logrus.Debugf("Additive time operation. operator=%s duration=%s", operator, duration)
+
+		dur, err := time.ParseDuration(duration)
+		if err != nil {
+			logrus.Debugf("Error parsing duration. err=%s", err)
+			return expr
+		}
+		when := time.Now()
+		if operator == "+" {
+			when = when.Add(dur)
+		} else if operator == "-" {
+			when = when.Add(-dur)
+		} else {
+			logrus.Debugf("Invalid time operator. op=%s", operator)
+			return expr
+		}
+		return fmt.Sprintf("\"%s\"", when.Format(time.RFC3339))
+	}
+
+	//simple expression
+	return expr
 }
 
 func jsonWrite(w http.ResponseWriter, statusCode int, result interface{}) {

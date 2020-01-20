@@ -41,6 +41,7 @@ func storeDocument(indexname string, mapping string, id string, contents map[str
 	contents["_index"] = indexname
 	contents["_mapping"] = mapping
 	contents["_id"] = id
+	contents["_updated"] = time.Now().Format(time.RFC3339)
 
 	logrus.Debugf("createDocument %v", newdoc)
 	wfb, err := json.Marshal(newdoc)

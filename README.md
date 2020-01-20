@@ -68,12 +68,17 @@ curl --location --request POST 'localhost:8200/testi/testm/_search?typed_keys=tr
 
 ## Current ES search query support
 
+Fields supported in query json
+
 * from
 * size
 * sort
-* bool.must.search_query.query - only one term
-* bool.must.search_query.fields
-* bool.must.terms
+* bool.must.search_query.query
+  * 'AND' for multiple terms in expression
+  * ranges for timestamp and numbers (ex.: when:[now-1h TO now]; qtty:[3 TO 334]))
+  * document property query (ex.: "prop1:abracadabra")
+* bool.must.search_query.fields - which fields will be returned in results
+* bool.must.terms - property matches
 
 Supported ES query example:
 
@@ -86,8 +91,8 @@ Supported ES query example:
             "must": [
                 {
                     "query_string": {
-                        "query": "\"task2Name\"",
-                        "fields": ["startTime"]
+                        "query": "\"task2Name\" AND startTime:[now-12h TO now] AND inputSize:[0 TO 20] AND _id:\"abcid2\"",
+                        "fields": ["startTime","workflowId","workflowType","startTime", "status"]
                     }
                 },
 		        {
@@ -128,6 +133,11 @@ Supported ES query example:
     ]
 }
 ```
+
+## ENVs configuration
+
+* LOG_LEVEL - verbosity level (debug, info, warning, error). defaults to info
+* BLAST_URL - Blast server to which to point Blast queries. Ex.: http://blast:6000
 
 ## Warning
 

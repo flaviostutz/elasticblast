@@ -20,6 +20,7 @@ FROM golang:1.13.2
 EXPOSE 9200
 
 ENV BLAST_URL       ''
+ENV LOG_LEVEL       'info'
 
 COPY --from=BUILD /go/bin/* /bin/
 ADD startup.sh /
