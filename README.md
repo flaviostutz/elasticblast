@@ -1,4 +1,7 @@
 # elasticblast
+
+[<img src="https://img.shields.io/docker/automated/flaviostutz/elasticblast"/>](https://hub.docker.com/r/flaviostutz/elasticblast)
+
 Elasticsearch to Blast (Bleve based) server bridge. Focused on the Document API section.
 
 To view a demo of Netflix Conductor running over Elasticblast (Conductor "thinks" it is using ES, but Bleve is doing the job), go to https://youtu.be/IjJQ0AEoyLo
